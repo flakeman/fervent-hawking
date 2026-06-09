@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "1c-helper": {
+      "command": "python",
+      "args": [
+        "[PATH_TO_WORKSPACE]/mcp/mcp_1c_helper.py"
+      ],
+      "env": {
+        "1C_ODATA_URL": "http://localhost/1c_db/odata/standard.odata/",
+        "1C_ODATA_USER": "Administrator",
+        "1C_ODATA_PASSWORD": "",
+        "1C_INDEX_FILE": "[PATH_TO_WORKSPACE]/data/1c_compact_index.json"
+      }
+    }
+  }
+}
