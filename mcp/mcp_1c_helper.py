@@ -47,6 +47,8 @@ def make_odata_request(endpoint, method="GET", data=None):
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             resp_data = response.read().decode("utf-8")
+            if not resp_data:
+                return {"status": "success", "message": "No content returned"}
             return json.loads(resp_data)
     except Exception as e:
         return {"error": str(e)}
@@ -64,7 +66,7 @@ def handle_request(req):
             },
             "serverInfo": {
                 "name": "1c-helper-mcp",
-                "version": "1.0.0"
+                "version": "1.1.0"
             }
         }
         send_response(rpc_id, result)
@@ -109,6 +111,29 @@ def handle_request(req):
                         "data": {"type": "object", "description": "Properties to update"}
                     },
                     "required": ["endpoint", "ref_key", "data"]
+                }
+            },
+            {
+                "name": "odata_delete",
+                "description": "Deletes a record or document in 1C via OData DELETE using its GUID.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "endpoint": {"type": "string", "description": "Resource type, e.g. 'Catalog_Номенклатура'"},
+                        "ref_key": {"type": "string", "description": "GUID of the record to delete"}
+                    },
+                    "required": ["endpoint", "ref_key"]
+                }
+            },
+            {
+                "name": "odata_get_structure",
+                "description": "Examines the field structure of a 1C OData table by retrieving a sample record and extracting its keys.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "endpoint": {"type": "string", "description": "Resource type, e.g. 'Catalog_Номенклатура'"}
+                    },
+                    "required": ["endpoint"]
                 }
             },
             {
@@ -189,6 +214,40 @@ def handle_request(req):
             url_endpoint = f"{endpoint}(guid'{ref_key}')"
             res = make_odata_request(url_endpoint, "PATCH", data)
             send_response(rpc_id, {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}]})
+            return
+
+        elif tool_name == "odata_delete":
+            endpoint = arguments.get("endpoint")
+            ref_key = arguments.get("ref_key")
+            url_endpoint = f"{endpoint}(guid'{ref_key}')"
+            res = make_odata_request(url_endpoint, "DELETE")
+            send_response(rpc_id, {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}]})
+            return
+
+        elif tool_name == "odata_get_structure":
+            endpoint = arguments.get("endpoint")
+            url_endpoint = f"{endpoint}?$top=1"
+            res = make_odata_request(url_endpoint, "GET")
+            
+            if "error" in res:
+                send_response(rpc_id, {"content": [{"type": "text", "text": f"Error querying structure: {res['error']}"}]})
+                return
+            
+            records = res.get("value", [])
+            if not records:
+                # Fallback if no records exist: try to explain or return empty keys
+                send_response(rpc_id, {"content": [{"type": "text", "text": f"Table '{endpoint}' is empty. Cannot extract field structure from a sample record. Please refer to local XML metadata configuration dump."}]})
+                return
+                
+            sample_record = records[0]
+            fields = list(sample_record.keys())
+            summary = {
+                "table": endpoint,
+                "fields_count": len(fields),
+                "fields": fields,
+                "sample_values_preview": sample_record
+            }
+            send_response(rpc_id, {"content": [{"type": "text", "text": json.dumps(summary, ensure_ascii=False, indent=2)}]})
             return
 
         elif tool_name == "search_config_metadata":
